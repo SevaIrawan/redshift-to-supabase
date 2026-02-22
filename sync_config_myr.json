@@ -1,0 +1,18 @@
+{
+  "source_table": "blue_whale_myr",
+  "target_table": "rs_blue_whale_myr",
+  "days_back": 3,
+  "filter_column": "agent_code",
+  "line_filter_mode": "specific",
+  "line_values": [
+    "JMMY",
+    "STMY",
+    "SBMY",
+    "LVMY"
+   ],
+  "schema": "public",
+  "date_column": "txn_date",
+  "order_column": "unique_key",
+  "batch_size": 2000
+}
+

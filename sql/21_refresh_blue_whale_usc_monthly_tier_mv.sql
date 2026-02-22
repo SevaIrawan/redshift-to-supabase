@@ -1,0 +1,1 @@
+REFRESH MATERIALIZED VIEW CONCURRENTLY public.blue_whale_usc_monthly_tier_mv;

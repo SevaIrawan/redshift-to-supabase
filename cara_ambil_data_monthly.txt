@@ -1,0 +1,6 @@
+python export_monthly_blue_whale.py --table blue_whale_sgd --month 2025-11
+python export_monthly_blue_whale.py --table blue_whale_usc --month 2025-11
+python export_monthly_blue_whale.py --table blue_whale_myr --month 2025-11
+python export_monthly_supabase.py --table rs_blue_whale_sgd --month 2025-11
+python export_monthly_supabase.py --table rs_blue_whale_myr --month 2025-11
+python export_monthly_supabase.py --table rs_blue_whale_usc --month 2025-11

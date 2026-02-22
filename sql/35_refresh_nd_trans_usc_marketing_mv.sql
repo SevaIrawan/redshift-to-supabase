@@ -1,0 +1,1 @@
+REFRESH MATERIALIZED VIEW public.nd_trans_usc_marketing_mv;

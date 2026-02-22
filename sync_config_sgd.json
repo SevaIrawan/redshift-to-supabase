@@ -1,0 +1,20 @@
+{
+  "source_table": "blue_whale_sgd",
+  "target_table": "rs_blue_whale_sgd",
+  "days_back": 3,
+  "filter_column": "agent_code",
+  "line_filter_mode": "specific",
+  "line_values": [
+    "WBSG",
+    "M24SG",
+    "ABSG",
+    "FWSG",
+    "OK188SG",
+    "OXSG"
+   ],
+  "schema": "public",
+  "date_column": "txn_date",
+  "order_column": "unique_key",
+  "batch_size": 2000
+}
+

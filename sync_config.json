@@ -1,0 +1,28 @@
+{
+  "source_table": "blue_whale_usc",
+  "target_table": "rs_blue_whale_usc",
+  "days_back": 3,
+  "filter_column": "agent_code",
+  "line_filter_mode": "specific",
+  "line_values": [
+    "HENG68KH",
+    "KH778",
+    "OK188KH",
+    "LOYKH",
+    "UWKH",
+    "17WINKH",
+    "SBKH",
+    "SB99KH",
+    "17WIN168KH",
+    "OK888KH",
+    "DIAMOND887KH",
+    "CAM78KH",
+    "CAM68KH",
+    "KH888"
+   ],
+  "schema": "public",
+  "date_column": "txn_date",
+  "order_column": "unique_key",
+  "batch_size": 2000
+}
+

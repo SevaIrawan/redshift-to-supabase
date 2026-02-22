@@ -1,0 +1,1 @@
+REFRESH MATERIALIZED VIEW public.db_usc_monthly_customer_monthly_summary;

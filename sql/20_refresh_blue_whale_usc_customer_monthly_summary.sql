@@ -1,0 +1,1 @@
+REFRESH MATERIALIZED VIEW public.blue_whale_usc_customer_monthly_summary;
