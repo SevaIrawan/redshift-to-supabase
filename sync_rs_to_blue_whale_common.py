@@ -1,5 +1,6 @@
-# Shared logic untuk sync rs_blue_whale_* → blue_whale_* (H-1) + log + Slack.
+# Shared logic sync rs_blue_whale_* → blue_whale_* (H-2 = 2 hari ke belakang) + log + Slack.
 # Dipanggil oleh sync_rs_to_blue_whale_usc/sgd/myr.py
+from __future__ import annotations
 
 import csv
 import io
@@ -72,9 +73,13 @@ def connect_supabase():
 COALESCE_COLS = {"operator_username"}
 
 
-def run_sync(conn, source_table: str, target_table: str) -> int:
+def run_sync(conn, source_table: str, target_table: str) -> tuple[int, list[date]]:
+    """Sync 2 hari ke belakang (kemarin + 2 hari lalu). Return (row_count, [date_2, date_1])."""
     today = date.today()
-    h1 = today - timedelta(days=1)
+    date_1 = today - timedelta(days=1)   # kemarin (01/03 bila hari ini 02/03)
+    date_2 = today - timedelta(days=2)   # 2 hari lalu (28/02 bila hari ini 02/03)
+    dates = [date_2, date_1]   # kronologi: 28/02 dulu, 01/03 kemudian
+
     src_cols, tgt_cols = zip(*COLUMN_MAPPING)
 
     def _sel(c):
@@ -91,26 +96,29 @@ def run_sync(conn, source_table: str, target_table: str) -> int:
     q_date = quote_name(DATE_COLUMN)
 
     cur = conn.cursor()
-    cur.execute(f'DELETE FROM {q_schema}.{q_target} WHERE {q_date} = %s', (h1,))
-    cur.execute(f'SELECT {src_list} FROM {q_schema}.{q_source} WHERE {q_date} = %s', (h1,))
+    # DELETE 2 hari: H-1 dan H-2
+    cur.execute(f'DELETE FROM {q_schema}.{q_target} WHERE {q_date} IN (%s, %s)', (date_1, date_2))
+    # SELECT 2 hari: H-1 dan H-2
+    cur.execute(f'SELECT {src_list} FROM {q_schema}.{q_source} WHERE {q_date} IN (%s, %s) ORDER BY {q_date}', (date_1, date_2))
     rows = cur.fetchall()
     if not rows:
         conn.commit()
         cur.close()
-        return 0
+        return 0, dates
     insert_sql = f'INSERT INTO {q_schema}.{q_target} ({tgt_list}) VALUES ({placeholders})'
     execute_batch(cur, insert_sql, rows, page_size=1000)
     conn.commit()
     cur.close()
-    return len(rows)
+    return len(rows), dates
 
 
-def build_log_csv(market: str, source: str, target: str, h1: date, rows: int, started: str, finished: str, status: str, message: str) -> str:
+def build_log_csv(market: str, source: str, target: str, dates: list[date], rows: int, started: str, finished: str, status: str, message: str) -> str:
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow(["# Sync rs_* → blue_whale_* (H-1)"])
-    w.writerow(["market", "source", "target", "date_h1", "rows_inserted", "started", "finished", "status", "message"])
-    w.writerow([market, source, target, str(h1), rows, started, finished, status, message])
+    w.writerow(["# Sync rs_* → blue_whale_* (H-2 = 2 hari ke belakang)"])
+    w.writerow(["market", "source", "target", "dates_deleted_and_replaced", "rows_inserted", "started", "finished", "status", "message"])
+    dates_str = ", ".join(str(d) for d in dates)
+    w.writerow([market, source, target, dates_str, rows, started, finished, status, message])
     return buf.getvalue()
 
 
@@ -138,7 +146,7 @@ def _upload_file_to_slack(file_path: Path, channel_id: str, token: str, initial_
 
 
 def send_log_to_slack(log_path_csv: Path, market: str, rows: int, status: str) -> None:
-    title = f"Sync rs_* → blue_whale_* ({market.upper()}) — {status} — {rows:,} rows"
+    title = f"Sync rs_* → blue_whale_* ({market.upper()}) H-2 — {status} — {rows:,} rows"
     bot_token = os.getenv("SLACK_BOT_TOKEN", "").strip()
     channel_id = os.getenv("SLACK_CHANNEL_ID", "").strip()
     if bot_token and channel_id:

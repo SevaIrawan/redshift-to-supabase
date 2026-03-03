@@ -1,10 +1,10 @@
 @echo off
-REM Sync rs_blue_whale_* -> blue_whale_* (H-1) - 3 script USC, SGD, MYR
-REM Boleh di-schedule di Windows Task Scheduler
+REM Sync rs_blue_whale_* -> blue_whale_* (H-2) - 3 script USC, SGD, MYR
+REM Bisa dijadwalkan di Windows Task Scheduler
 cd /d "%~dp0"
 
 echo ============================================
-echo RS TO BLUE WHALE SYNC (H-1)
+echo RS TO BLUE WHALE SYNC (H-2)
 echo ============================================
 echo Start: %date% %time%
 echo.

@@ -6,7 +6,7 @@
 |----|-----------|--------|---------------------|
 | 1 | **run_all_sync.bat** | Import Redshift → Supabase (USC, SGD, MYR), 3 hari | Setiap hari 08:00 |
 | 2 | **run_sql_steps.bat** | 35 step SQL (trigger, backfill, refresh MV) | Setiap hari 09:00 |
-| 3 | **run_rs_to_blue_whale_sync.bat** | Copy H-1 rs_* → blue_whale_* (USC, SGD, MYR) | Setiap hari 08:30 |
+| 3 | **run_rs_to_blue_whale_sync.bat** | Copy H-2 rs_* → blue_whale_* (USC, SGD, MYR) | Setiap hari 08:30 |
 | 4 | **run_validate_kpi.bat** | Validasi KPI + log ke Slack | Setiap hari 10:00 |
 
 **Urutan disarankan:** 1 → 3 → 2 → 4 (sync dulu, lalu rs→blue_whale, lalu SQL steps, akhirnya validasi KPI).
@@ -61,7 +61,7 @@ Pastikan folder project ada dan berisi:
 |------|----------------|----------------|----------|
 | Sync Redshift | `Auto Sync Redshift to Supabase` | `C:\Users\BDC Computer\Redshift to Supabase\run_all_sync.bat` | `C:\Users\BDC Computer\Redshift to Supabase` |
 | SQL Steps | `Auto SQL Runner (35 steps)` | `C:\Users\BDC Computer\Redshift to Supabase\run_sql_steps.bat` | `C:\Users\BDC Computer\Redshift to Supabase` |
-| RS to Blue Whale | `Auto RS to Blue Whale (H-1)` | `C:\Users\BDC Computer\Redshift to Supabase\run_rs_to_blue_whale_sync.bat` | `C:\Users\BDC Computer\Redshift to Supabase` |
+| RS to Blue Whale | `Auto RS to Blue Whale (H-2)` | `C:\Users\BDC Computer\Redshift to Supabase\run_rs_to_blue_whale_sync.bat` | `C:\Users\BDC Computer\Redshift to Supabase` |
 | Validate KPI | `Auto Validate KPI` | `C:\Users\BDC Computer\Redshift to Supabase\run_validate_kpi.bat` | `C:\Users\BDC Computer\Redshift to Supabase` |
 
 **Ganti** `C:\Users\BDC Computer\Redshift to Supabase` dengan path folder project Anda jika berbeda.
@@ -274,7 +274,7 @@ Ulangi **Step 2–3** untuk setiap script. Setiap script = **satu task terpisah*
 | Task | Name task | File .bat | Saran waktu trigger |
 |------|-----------|-----------|------------------------|
 | 1 | Auto Sync Redshift to Supabase | run_all_sync.bat | Daily 08:00 |
-| 2 | Auto RS to Blue Whale H-1 | run_rs_to_blue_whale_sync.bat | Daily 08:30 |
+| 2 | Auto RS to Blue Whale H-2 | run_rs_to_blue_whale_sync.bat | Daily 08:30 |
 | 3 | Auto SQL Runner 35 steps | run_sql_steps.bat | Daily 09:00 |
 | 4 | Auto Validate KPI | run_validate_kpi.bat | Daily 10:00 |
 
