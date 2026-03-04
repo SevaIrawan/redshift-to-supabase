@@ -3,6 +3,10 @@
 .env.local
 .env.*.local
 
+# Google Service Account (jangan commit private key)
+*service*account*.json
+data-marketing-usc-*.json
+
 # Python
 __pycache__/
 *.py[cod]
