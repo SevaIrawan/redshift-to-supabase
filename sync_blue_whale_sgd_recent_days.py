@@ -144,6 +144,7 @@ def sync_recent_days(
         print(f"Filter values: {', '.join(line_values)}")
     else:
         print(f"Filter values: ALL (semua {filter_column})")
+    print("Activity filter: only rows with at least one of (deposit_cases, deposit_amount, withdraw_*, bonus, add/deduct_*, total_bet*) > 0")
 
     # Cek kolom di source table
     info_cursor = redshift.cursor()
@@ -155,6 +156,14 @@ def sync_recent_days(
         raise SystemExit(f"[ERROR] Kolom {date_column} tidak ada di source table.")
     if filter_column not in columns:
         raise SystemExit(f"[ERROR] Kolom {filter_column} tidak ada di source table.")
+    activity_columns = [
+        "deposit_cases", "deposit_amount", "withdraw_cases", "withdraw_amount",
+        "bonus", "add_transaction", "deduct_transaction", "add_bonus", "deduct_bonus",
+        "total_bet", "total_bet_amount", "total_valid_bet_amount",
+    ]
+    missing_activity = [c for c in activity_columns if c not in columns]
+    if missing_activity:
+        raise SystemExit(f"[ERROR] Kolom activity tidak ada di source table: {', '.join(missing_activity)}")
 
     ensure_last_synced_column(supabase, qualified_target)
 
@@ -173,6 +182,11 @@ def sync_recent_days(
             f"{date_column_q} >= %s AND {date_column_q} < %s"
         )
         where_params = [start_date, end_date]
+
+    # Filter activity: hanya baris yang punya minimal satu aktivitas > 0
+    activity_conditions = [f"COALESCE({quote_name(c)}, 0) > 0" for c in activity_columns]
+    activity_clause = "(" + " OR ".join(activity_conditions) + ")"
+    where_clause = where_clause + " AND " + activity_clause
 
     # STEP 1: Hapus 3 hari back dari Supabase (sesuai date window, tanpa filter line)
     print("\n[STEP 1] Deleting 3 days back from Supabase...")
