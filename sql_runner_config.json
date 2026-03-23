@@ -3,6 +3,8 @@
     { "name": "Disable trigger blue_whale_usc", "sql_file": "sql/01_disable_trigger_blue_whale_usc.sql" },
     { "name": "Disable trigger blue_whale_myr", "sql_file": "sql/02_disable_trigger_blue_whale_myr.sql" },
     { "name": "Disable trigger blue_whale_sgd", "sql_file": "sql/03_disable_trigger_blue_whale_sgd.sql" },
+    { "name": "Update line blue_whale_usc (UWKH33 -> LOY66)", "sql_file": "sql/03a_update_blue_whale_usc_line_uwkh33.sql" },
+    { "name": "Update line blue_whale_usc (UWKH29 -> UWKH)", "sql_file": "sql/03b_update_blue_whale_usc_line_uwkh29.sql" },
     { "name": "Backfill blue_whale_myr", "sql_file": "sql/04_backfill_blue_whale_myr.sql" },
     { "name": "Backfill blue_whale_sgd", "sql_file": "sql/05_backfill_blue_whale_sgd.sql" },
     { "name": "Backfill blue_whale_usc", "sql_file": "sql/06_backfill_blue_whale_usc.sql" },
