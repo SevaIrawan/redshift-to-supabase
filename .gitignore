@@ -55,6 +55,7 @@ Thumbs.db
 
 # Exports & generated data
 exports/
+exports_redshift/
 monthly_exports/
 *.csv
 *.db
