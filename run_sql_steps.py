@@ -1,6 +1,6 @@
 """
 Jalankan semua perintah SQL (dari sql_runner_config.json) step by step.
-Setiap step di-log (success/error). Log disimpan ke .csv lalu dikirim ke Slack.
+Setiap step di-log (success/error). Log disimpan ke .csv.
 """
 import csv
 import io
@@ -11,9 +11,7 @@ from datetime import datetime
 from pathlib import Path
 
 import psycopg2
-import requests
 from dotenv import load_dotenv
-from slack_sdk import WebClient
 
 load_dotenv()
 
@@ -23,7 +21,7 @@ load_dotenv()
 SCRIPT_DIR = Path(__file__).resolve().parent
 CONFIG_PATH = SCRIPT_DIR / "sql_runner_config.json"
 LOGS_DIR = SCRIPT_DIR / "logs"
-EXPECTED_STEPS = 38
+EXPECTED_STEPS = 40
 
 
 def connect_supabase():
@@ -132,7 +130,7 @@ def run_step(conn, step_name: str, sql_path: Path) -> dict:
 def build_log_csv(entries: list, started: str, finished: str, summary: dict) -> str:
     buf = io.StringIO()
     w = csv.writer(buf)
-    w.writerow(["# SQL Runner Log - Semua execute (1–36)"])
+    w.writerow(["# SQL Runner Log - Semua step"])
     w.writerow(["# Started", started])
     w.writerow(["# Finished", finished])
     w.writerow(["# Summary", f"Total: {summary['total']} | Success: {summary['success']} | Error: {summary['error']}"])
@@ -142,41 +140,6 @@ def build_log_csv(entries: list, started: str, finished: str, summary: dict) -> 
         rc = e.get("rowcount") if e.get("rowcount") is not None else ""
         w.writerow([i, e["step"], e["status"], e["message"], rc])
     return buf.getvalue()
-
-
-def _upload_file_to_slack(file_path: Path, channel_id: str, token: str, initial_comment: str = "", title: str = "") -> tuple[bool, str]:
-    """Upload file ke Slack pakai API V2 (files_upload_v2). Return (berjaya, error_message)."""
-    try:
-        client = WebClient(token=token)
-        client.files_upload_v2(
-            channel=channel_id,
-            title=title or file_path.stem,
-            filename=file_path.name,
-            file=str(file_path),
-            initial_comment=initial_comment or "📎 Rekap CSV",
-        )
-        return True, ""
-    except Exception as e:
-        return False, str(e)
-
-
-def send_log_to_slack(log_path_csv: Path, summary: dict) -> None:
-    success_count = summary["success"]
-    total = summary["total"]
-    err = summary["error"]
-    title = "SQL Runner completed"
-    if err:
-        title += f" — {success_count}/{total} success, {err} error(s)"
-    else:
-        title += f" — All {total} step(s) success"
-
-    bot_token = os.getenv("SLACK_BOT_TOKEN", "").strip()
-    channel_id = os.getenv("SLACK_CHANNEL_ID", "").strip()
-
-    if bot_token and channel_id:
-        ok, err_msg = _upload_file_to_slack(log_path_csv, channel_id, bot_token, f"*{title}*\n\n📎 Rekap CSV — klik untuk buka:", title=title)
-        if not ok:
-            print("[Slack] File upload gagal:", err_msg, "- Pastikan invite bot ke channel: /invite @ETL_Airflow")
 
 
 def main():
@@ -267,8 +230,6 @@ def main():
     print(f"Success: {success}/{total}  Errors: {error}")
     print(f"Log CSV:  {log_path_csv}")
     print("=" * 60)
-
-    send_log_to_slack(log_path_csv, summary)
 
     sys.exit(0 if error == 0 else 1)
 

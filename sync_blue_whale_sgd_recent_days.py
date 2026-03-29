@@ -9,11 +9,7 @@ import psycopg2
 from psycopg2.extras import execute_batch
 from dotenv import load_dotenv
 
-from sync_blue_whale_recent_common import (
-    LOGS_DIR,
-    build_log_csv,
-    send_log_to_slack,
-)
+from sync_blue_whale_recent_common import LOGS_DIR, build_log_csv
 
 
 def quote_name(name: str) -> str:
@@ -318,7 +314,6 @@ def _notify_sync_done(market: str, source: str, target: str, date_range: str, ro
     log_csv = build_log_csv(market, source, target, date_range, rows, started, finished, status, message)
     log_path_csv.write_text(log_csv, encoding="utf-8")
     print(f"Log: {log_path_csv}")
-    send_log_to_slack(log_path_csv, market, rows, status, date_range)
 
 
 def main():

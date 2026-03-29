@@ -37,6 +37,8 @@
     { "name": "Refresh hod_customer_retention_monthly", "sql_file": "sql/33_refresh_hod_customer_retention_monthly.sql" },
     { "name": "Refresh nd_usc_marketing_mv", "sql_file": "sql/34_refresh_nd_usc_marketing_mv.sql" },
     { "name": "Refresh nd_trans_usc_marketing_mv", "sql_file": "sql/35_refresh_nd_trans_usc_marketing_mv.sql" },
-    { "name": "Update tier blue_whale_usc dari monthly_tier_mv", "sql_file": "sql/36_update_tier_blue_whale_usc.sql" }
+    { "name": "Update tier blue_whale_usc dari monthly_tier_mv", "sql_file": "sql/36_update_tier_blue_whale_usc.sql" },
+    { "name": "Refresh tier_myr_mv_v1 CONCURRENTLY", "sql_file": "sql/39_refresh_tier_myr_mv_v1.sql" },
+    { "name": "Update tier_label blue_whale_myr dari tier_myr_mv_v1", "sql_file": "sql/40_update_blue_whale_myr_tier_from_tier_myr_mv.sql" }
   ]
 }

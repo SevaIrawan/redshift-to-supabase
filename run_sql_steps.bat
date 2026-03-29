@@ -14,7 +14,7 @@ cd /d "%~dp0"
 
 python run_sql_steps.py
 if %errorlevel% neq 0 (
-    echo [WARNING] SQL Runner finished with errors. Check log and Slack.
+    echo [WARNING] SQL Runner finished with errors. Check logs folder.
 ) else (
     echo [OK] SQL Runner completed successfully.
 )

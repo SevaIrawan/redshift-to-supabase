@@ -1,5 +1,5 @@
 """
-Sync rs_blue_whale_myr → blue_whale_myr (Supabase, H-2). Log + notif Slack.
+Sync rs_blue_whale_myr → blue_whale_myr (Supabase, H-2). Log CSV.
 """
 import sys
 from datetime import date, datetime, timedelta
@@ -10,10 +10,9 @@ load_dotenv()
 
 from sync_rs_to_blue_whale_common import (
     LOGS_DIR,
+    build_log_csv,
     connect_supabase,
     run_sync,
-    build_log_csv,
-    send_log_to_slack,
 )
 
 MARKET = "myr"
@@ -58,7 +57,6 @@ def main():
     log_csv = build_log_csv(MARKET, SOURCE_TABLE, TARGET_TABLE, dates, rows, started, finished, status, message)
     log_path_csv.write_text(log_csv, encoding="utf-8")
     print(f"Log: {log_path_csv}")
-    send_log_to_slack(log_path_csv, MARKET, rows, status)
 
 
 if __name__ == "__main__":

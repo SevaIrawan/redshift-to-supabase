@@ -2,4 +2,4 @@
 import sys
 
 if __name__ == "__main__":
-    sys.exit(export_table("deposit", "csv"))
+    sys.exit(export_table("deposit_myr", "csv"))

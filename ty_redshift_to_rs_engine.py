@@ -1,22 +1,36 @@
+"""
+TY = kemarin + hari ini. Redshift → rs_blue_whale_*.
+File baru; tidak mengimpor sync_blue_whale_* / sync_blue_whale_recent_common.
+
+Paritas dengan sync_blue_whale_*_recent_days (run_all_sync.bat):
+  - Kunci config JSON sama: source_table, target_table, filter_column, line_filter_mode,
+    line_values, schema, date_column, order_column, batch_size; env SYNC_CONFIG*_PATH.
+  - Filter tanggal: txn_date >= start AND txn_date < end + opsional IN(filter_column)
+    + activity OR (kolom & COALESCE sama persis).
+  - DELETE di Supabase untuk rentang yang sama (tanpa filter line).
+  - INSERT semua kolom dari Redshift + last_synced_at jika kolom ada; execute_batch page_size 500.
+
+Perbedaan yang disengaja: rentang tanggal TY = kemarin .. < besok (get_yesterday_today_bounds),
+  bukan get_recent_days_window(days_back) dari config (biasanya 3 hari).
+"""
+from __future__ import annotations
+
+import json
 import os
 import sys
 import time
-import json
 from datetime import date, timedelta
 
-import redshift_connector
 import psycopg2
-from psycopg2.extras import execute_batch
+import redshift_connector
 from dotenv import load_dotenv
+from psycopg2.extras import execute_batch
 
-from sync_blue_whale_recent_common import LOGS_DIR, build_log_csv
+LAST_SYNC_COLUMN = "last_synced_at"
 
 
 def quote_name(name: str) -> str:
     return '"{}"'.format(name.replace('"', '""'))
-
-
-LAST_SYNC_COLUMN = "last_synced_at"
 
 
 def connect_redshift():
@@ -61,68 +75,41 @@ def ensure_last_synced_column(conn, qualified_table: str):
     cursor.close()
 
 
-def load_config(config_path: str = "sync_config_myr.json") -> dict:
-    """
-    Load konfigurasi dari file JSON.
-    """
+def load_config(config_path: str) -> dict:
     if not os.path.exists(config_path):
         raise FileNotFoundError(
             f"Config file '{config_path}' tidak ditemukan. "
             f"Silakan buat file config terlebih dahulu."
         )
-    
     with open(config_path, "r", encoding="utf-8") as f:
-        config = json.load(f)
-    
-    return config
+        return json.load(f)
 
 
-def get_recent_days_window(days_back: int) -> tuple[date, date]:
-    """
-    Menghitung tanggal window untuk beberapa hari terakhir.
-    Auto detect tanggal hari ini dari sistem.
-    Contoh: jika hari ini tanggal 19 dan days_back=3, 
-    maka akan mengambil data tanggal 18, 17, 16 (H-1, H-2, H-3)
-    """
-    today = date.today()  # Auto detect tanggal hari ini
-    # H-1 dari hari ini, jadi mulai dari kemarin
-    end_date = today  # Exclusive end (tidak termasuk hari ini)
-    start_date = today - timedelta(days=days_back)  # H-3, H-2, H-1
-    return start_date, end_date
+def get_yesterday_today_bounds() -> tuple[date, date]:
+    """(start_inclusive, end_exclusive): kemarin .. < besok."""
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+    end_exclusive = today + timedelta(days=1)
+    return yesterday, end_exclusive
 
 
-def sync_recent_days(
+def sync_ty_window(
     redshift,
     supabase,
+    *,
     source_table: str,
     target_table: str,
-    days_back: int,
+    start_date: date,
+    end_exclusive: date,
     line_values: list[str],
     filter_column: str = "agent_code",
     schema: str = "public",
     date_column: str = "txn_date",
     order_column: str = "unique_key",
     batch_size: int = 2000,
-    market: str = "myr",
+    market: str = "usc",
 ):
-    """
-    Sync data beberapa hari terakhir dengan filter berdasarkan kolom tertentu.
-    Logic: Hapus 3 hari back dari Supabase, lalu import 3 hari back dari Redshift.
-    
-    Args:
-        days_back: Berapa hari ke belakang dari hari ini (misalnya 3 untuk H-1, H-2, H-3)
-        line_values: List nilai filter yang akan diambil (contoh: ['SBKH', 'UWKH'])
-        filter_column: Nama kolom untuk filter (default: 'agent_code')
-    """
-    sync_start_ts = time.time()
-    today = date.today()  # Auto detect tanggal hari ini
-    start_date, end_date = get_recent_days_window(days_back)
-    d = start_date
-    day_list = []
-    while d < end_date:
-        day_list.append(d)
-        d += timedelta(days=1)
-    sync_data_range = "/".join(d.strftime("%d") for d in day_list) + " " + start_date.strftime("%B %Y") + f" ({len(day_list)} Days)"
+    today = date.today()
     qualified_source = f"{quote_name(schema)}.{quote_name(source_table)}"
     qualified_target = f"{quote_name(schema)}.{quote_name(target_table)}"
     order_column_q = quote_name(order_column)
@@ -130,19 +117,20 @@ def sync_recent_days(
     filter_column_q = quote_name(filter_column)
 
     print("\n" + "=" * 70)
-    print(f"SYNC {source_table} -> {target_table}")
+    print(f"TY SYNC {source_table} -> {target_table} ({market})")
     print("=" * 70)
-    print(f"Today date: {today} (auto detected)")
-    print(f"Date window: {start_date} <= {date_column} < {end_date}")
-    print(f"Days back: {days_back} (H-1, H-2, ..., H-{days_back})")
+    print(f"Today: {today}")
+    print(f"Window: {start_date} <= {date_column} < {end_exclusive}")
     print(f"Filter column: {filter_column}")
     if line_values:
         print(f"Filter values: {', '.join(line_values)}")
     else:
-        print(f"Filter values: ALL (semua {filter_column})")
-    print("Activity filter: only rows with at least one of (deposit_cases, deposit_amount, withdraw_*, bonus, add/deduct_*, total_bet*) > 0")
+        print(f"Filter values: ALL")
+    print(
+        "Activity filter: only rows with at least one of "
+        "(deposit_cases, deposit_amount, withdraw_*, bonus, add/deduct_*, total_bet*) > 0"
+    )
 
-    # Cek kolom di source table
     info_cursor = redshift.cursor()
     info_cursor.execute(f"SELECT * FROM {qualified_source} LIMIT 0")
     columns = [desc[0] for desc in info_cursor.description]
@@ -159,70 +147,55 @@ def sync_recent_days(
     ]
     missing_activity = [c for c in activity_columns if c not in columns]
     if missing_activity:
-        raise SystemExit(f"[ERROR] Kolom activity tidak ada di source table: {', '.join(missing_activity)}")
+        raise SystemExit(f"[ERROR] Kolom activity tidak ada: {', '.join(missing_activity)}")
 
     ensure_last_synced_column(supabase, qualified_target)
 
-    # Build WHERE clause - dengan atau tanpa filter
     if line_values:
-        # Filter berdasarkan nilai tertentu
         filter_placeholders = ",".join(["%s"] * len(line_values))
         where_clause = (
             f"{date_column_q} >= %s AND {date_column_q} < %s "
             f"AND {filter_column_q} IN ({filter_placeholders})"
         )
-        where_params = [start_date, end_date] + line_values
+        where_params = [start_date, end_exclusive] + line_values
     else:
-        # Semua nilai (tanpa filter)
-        where_clause = (
-            f"{date_column_q} >= %s AND {date_column_q} < %s"
-        )
-        where_params = [start_date, end_date]
+        where_clause = f"{date_column_q} >= %s AND {date_column_q} < %s"
+        where_params = [start_date, end_exclusive]
 
-    # Filter activity: hanya baris yang punya minimal satu aktivitas > 0
     activity_conditions = [f"COALESCE({quote_name(c)}, 0) > 0" for c in activity_columns]
     activity_clause = "(" + " OR ".join(activity_conditions) + ")"
     where_clause = where_clause + " AND " + activity_clause
 
-    # STEP 1: Hapus 3 hari back dari Supabase (sesuai date window, tanpa filter line)
-    print("\n[STEP 1] Deleting 3 days back from Supabase...")
+    print("\n[STEP 1] Delete window dari Supabase...")
     delete_cursor = supabase.cursor()
     delete_sql = (
         f"DELETE FROM {qualified_target} "
         f"WHERE {date_column_q} >= %s AND {date_column_q} < %s"
     )
-    delete_cursor.execute(delete_sql, (start_date, end_date))
+    delete_cursor.execute(delete_sql, (start_date, end_exclusive))
     supabase.commit()
     deleted = delete_cursor.rowcount
     delete_cursor.close()
-    print(f"[OK] Deleted {deleted:,} rows from Supabase (date range: {start_date} to {end_date})")
+    print(f"[OK] Deleted {deleted:,} rows")
 
-    # STEP 2: Ambil 3 hari back dari Redshift dengan filter line
-    print("\n[STEP 2] Fetching 3 days back from Redshift...")
+    print("\n[STEP 2] Fetch dari Redshift...")
     count_cursor = redshift.cursor()
     count_cursor.execute(
-        f"""
-        SELECT COUNT(*)
-        FROM {qualified_source}
-        WHERE {where_clause}
-        """,
+        f"SELECT COUNT(*) FROM {qualified_source} WHERE {where_clause}",
         where_params,
     )
     rows_to_sync = count_cursor.fetchone()[0]
     count_cursor.close()
     print(f"Rows to import: {rows_to_sync:,}")
-    
+
     if rows_to_sync == 0:
-        print("[INFO] Tidak ada data untuk periode dan line yang dipilih.")
-        sync_end_ts = time.time()
-        _notify_sync_done(market, source_table, target_table, sync_data_range, 0, sync_start_ts, sync_end_ts, "success", "No data to sync")
+        print("[INFO] Tidak ada data.")
         return
 
-    # Tampilkan breakdown per tanggal dan filter column
     breakdown_cursor = redshift.cursor()
     breakdown_cursor.execute(
         f"""
-        SELECT 
+        SELECT
             {date_column_q}::date as tanggal,
             {filter_column_q} as filter_value,
             COUNT(*) as jumlah
@@ -238,32 +211,25 @@ def sync_recent_days(
         print(f"  - {row[0]} | {row[1]}: {row[2]:,} rows")
     breakdown_cursor.close()
 
-    # Prepare insert
-    # Karena data untuk date range sudah dihapus di STEP 1, tidak akan ada duplikat
-    # Jadi gunakan INSERT biasa saja tanpa ON CONFLICT
     col_names = ", ".join(quote_name(col) for col in columns)
     placeholders = ", ".join(["%s"] * len(columns))
-    
-    # Cek apakah kolom last_synced_at ada di target table
+
     target_info_cursor = supabase.cursor()
     target_info_cursor.execute(f"SELECT * FROM {qualified_target} LIMIT 0")
     target_columns = [desc[0] for desc in target_info_cursor.description]
     target_info_cursor.close()
-    
+
     if LAST_SYNC_COLUMN in target_columns:
-        # Jika kolom last_synced_at ada, tambahkan ke insert
         insert_sql = (
             f"INSERT INTO {qualified_target} ({col_names}, {quote_name(LAST_SYNC_COLUMN)}) "
             f"VALUES ({placeholders}, NOW())"
         )
     else:
-        # Jika kolom last_synced_at tidak ada, insert tanpa kolom tersebut
         insert_sql = (
             f"INSERT INTO {qualified_target} ({col_names}) "
             f"VALUES ({placeholders})"
         )
 
-    # Fetch dan insert
     fetch_cursor = redshift.cursor()
     fetch_cursor.execute(
         f"""
@@ -299,24 +265,10 @@ def sync_recent_days(
 
     insert_cursor.close()
     fetch_cursor.close()
-    print(f"\n[STEP 3] [DONE] Synced {inserted:,} rows into {target_table}.")
-    sync_end_ts = time.time()
-    _notify_sync_done(market, source_table, target_table, sync_data_range, inserted, sync_start_ts, sync_end_ts, "success", "OK")
+    print(f"\n[STEP 3] [DONE] {inserted:,} rows -> {target_table}.")
 
 
-def _notify_sync_done(market: str, source: str, target: str, date_range: str, rows: int, start_ts: float, end_ts: float, status: str, message: str):
-    from datetime import datetime
-    started = datetime.fromtimestamp(start_ts).strftime("%Y-%m-%d %H:%M:%S")
-    finished = datetime.fromtimestamp(end_ts).strftime("%Y-%m-%d %H:%M:%S")
-    LOGS_DIR.mkdir(parents=True, exist_ok=True)
-    ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    log_path_csv = LOGS_DIR / f"sync_recent_{market}_{ts}.csv"
-    log_csv = build_log_csv(market, source, target, date_range, rows, started, finished, status, message)
-    log_path_csv.write_text(log_csv, encoding="utf-8")
-    print(f"Log: {log_path_csv}")
-
-
-def main():
+def run_ty_main(*, env_var: str, default_config: str, market: str):
     if sys.platform == "win32":
         try:
             sys.stdout.reconfigure(encoding="utf-8")
@@ -324,80 +276,50 @@ def main():
             pass
 
     load_dotenv()
-
-    # -------------------------------------------------------------------
-    # Load config dari file
-    # -------------------------------------------------------------------
-    config_path = os.getenv("SYNC_CONFIG_MYR_PATH", "sync_config_myr.json")
+    config_path = os.getenv(env_var, default_config)
     try:
         config = load_config(config_path)
-        print(f"[OK] Config loaded from: {config_path}")
+        print(f"[OK] Config: {config_path}")
     except FileNotFoundError as e:
         print(f"[ERROR] {e}")
         sys.exit(1)
     except json.JSONDecodeError as e:
-        print(f"[ERROR] Format JSON tidak valid: {e}")
+        print(f"[ERROR] JSON invalid: {e}")
         sys.exit(1)
 
-    # Extract config values
-    SOURCE_TABLE = config.get("source_table", "blue_whale_myr")
-    TARGET_TABLE = config.get("target_table", "rs_blue_whale_myr")
-    DAYS_BACK = config.get("days_back", 3)
+    SOURCE_TABLE = config.get("source_table", "blue_whale_usc")
+    TARGET_TABLE = config.get("target_table", "rs_blue_whale_usc")
     FILTER_COLUMN = config.get("filter_column", "agent_code")
     LINE_FILTER_MODE = config.get("line_filter_mode", "specific").lower()
-    LINE_VALUES = config.get("line_values", [])
+    LINE_VALUES = list(config.get("line_values", []))
     SCHEMA = config.get("schema", "public")
     DATE_COLUMN = config.get("date_column", "txn_date")
     ORDER_COLUMN = config.get("order_column", "unique_key")
     BATCH_SIZE = config.get("batch_size", 2000)
 
-    # Validasi line_filter_mode
-    if LINE_FILTER_MODE not in ["all", "specific"]:
-        print(f"[ERROR] line_filter_mode harus 'all' atau 'specific', ditemukan: {LINE_FILTER_MODE}")
+    if LINE_FILTER_MODE not in ("all", "specific"):
+        print(f"[ERROR] line_filter_mode harus 'all' atau 'specific'")
         sys.exit(1)
-
-    # Jika mode = "all", ignore line_values
     if LINE_FILTER_MODE == "all":
         LINE_VALUES = []
-        print("[INFO] Line filter mode: ALL - semua line akan diambil")
-    else:
-        if not LINE_VALUES:
-            print("[WARNING] line_filter_mode = 'specific' tapi line_values kosong!")
-            print("[INFO] Akan otomatis mengambil semua line yang ada")
-            LINE_VALUES = []
+    elif not LINE_VALUES:
+        print("[WARNING] line_values kosong — akan DISTINCT dari Redshift")
 
-    today = date.today()  # Auto detect tanggal hari ini
-    start_date, end_date = get_recent_days_window(DAYS_BACK)
+    start_date, end_exclusive = get_yesterday_today_bounds()
 
     print("=" * 70)
-    print("SYNC BLUE WHALE MYR - RECENT DAYS (AUTO DETECT)")
-    print("=" * 70)
-    print(f"Config file: {config_path}")
-    print(f"Today date: {today} (auto detected from system)")
-    print(f"Source table: {SOURCE_TABLE}")
-    print(f"Target table: {TARGET_TABLE}")
-    print(f"Days back: {DAYS_BACK} (H-1, H-2, H-3)")
-    print(f"Date range: {start_date} to {end_date}")
-    print(f"Filter column: {FILTER_COLUMN}")
-    print(f"Line filter mode: {LINE_FILTER_MODE.upper()}")
-    if LINE_FILTER_MODE == "specific" and LINE_VALUES:
-        print(f"Filter values: {', '.join(LINE_VALUES)}")
-    else:
-        print(f"Filter values: ALL (semua {FILTER_COLUMN})")
+    print(f"TY REDSHIFT → RS — {market.upper()}")
     print("=" * 70)
 
     redshift = connect_redshift()
     supabase = connect_supabase()
-
     try:
-        # Jika LINE_VALUES kosong, ambil semua nilai filter column
         if not LINE_VALUES:
-            # Ambil semua nilai filter column yang ada untuk periode tersebut
             qualified_source = f"{quote_name(SCHEMA)}.{quote_name(SOURCE_TABLE)}"
             date_column_q = quote_name(DATE_COLUMN)
             filter_column_q = quote_name(FILTER_COLUMN)
-            filter_cursor = redshift.cursor()
-            filter_cursor.execute(
+            fc = redshift.cursor()
+            fc.execute(
                 f"""
                 SELECT DISTINCT {filter_column_q}
                 FROM {qualified_source}
@@ -405,30 +327,29 @@ def main():
                 AND {filter_column_q} IS NOT NULL
                 ORDER BY {filter_column_q}
                 """,
-                (start_date, end_date),
+                (start_date, end_exclusive),
             )
-            LINE_VALUES = [row[0] for row in filter_cursor.fetchall()]
-            filter_cursor.close()
-            
+            LINE_VALUES = [row[0] for row in fc.fetchall()]
+            fc.close()
             if not LINE_VALUES:
-                print(f"\n[INFO] Tidak ada data {FILTER_COLUMN} untuk periode tersebut.")
+                print(f"[INFO] Tidak ada {FILTER_COLUMN} untuk window TY.")
                 return
-            
-            print(f"\n[INFO] Ditemukan {len(LINE_VALUES)} nilai {FILTER_COLUMN}: {', '.join(LINE_VALUES)}")
+            print(f"[INFO] {len(LINE_VALUES)} nilai {FILTER_COLUMN}.")
 
-        sync_recent_days(
+        sync_ty_window(
             redshift,
             supabase,
             source_table=SOURCE_TABLE,
             target_table=TARGET_TABLE,
-            days_back=DAYS_BACK,
+            start_date=start_date,
+            end_exclusive=end_exclusive,
             line_values=LINE_VALUES,
             filter_column=FILTER_COLUMN,
             schema=SCHEMA,
             date_column=DATE_COLUMN,
             order_column=ORDER_COLUMN,
             batch_size=BATCH_SIZE,
-            market="myr",
+            market=market,
         )
     finally:
         try:
@@ -439,8 +360,3 @@ def main():
             redshift.close()
         except Exception:
             pass
-
-
-if __name__ == "__main__":
-    main()
-

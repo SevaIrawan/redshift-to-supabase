@@ -3,7 +3,7 @@ Validasi KPI per brand (rs_blue_whale_usc, rs_blue_whale_myr, rs_blue_whale_sgd)
 Date range: H-1 sahaja (1 hari).
 Laporan: satu baris per txn_date per brand — txn_date, deposit_cases (SUM), deposit_amount (SUM),
 net_profit (SUM), active_members (COUNT DISTINCT user_unique WHERE deposit_cases > 0).
-Log disimpan ke .csv dan dikirim ke Slack.
+Log disimpan ke .csv.
 """
 import csv
 import io
@@ -13,9 +13,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import psycopg2
-import requests
 from dotenv import load_dotenv
-from slack_sdk import WebClient
 
 load_dotenv()
 
@@ -138,32 +136,6 @@ def build_report_csv(report: dict, started: str, finished: str, start_date: date
     return buf.getvalue()
 
 
-def send_report_to_slack(csv_content: str, log_path_csv: Path, start_date: date, end_date: date) -> None:
-    title = f"KPI Validation completed — date range {start_date} to {end_date}"
-    bot_token = os.getenv("SLACK_BOT_TOKEN", "").strip()
-    channel_id = os.getenv("SLACK_CHANNEL_ID", "").strip()
-
-    if bot_token and channel_id:
-        try:
-            client = WebClient(token=bot_token)
-            client.files_upload_v2(
-                channel=channel_id,
-                title=title,
-                filename=log_path_csv.name,
-                file=str(log_path_csv),
-                initial_comment=f"*{title}*\n\n📎 Rekap CSV — klik untuk buka:",
-            )
-        except Exception as e:
-            err = str(e)
-            print(f"[Slack] File upload GAGAL: {err}")
-            if "not_in_channel" in err:
-                print("         → Bot belum di-invite ke channel. Ketik: /invite @ETL_Airflow")
-            elif "invalid_auth" in err or "token_revoked" in err:
-                print("         → Cek SLACK_BOT_TOKEN di .env")
-            elif "channel_not_found" in err:
-                print("         → Cek SLACK_CHANNEL_ID (format: C1234567890)")
-
-
 def main():
     if sys.platform == "win32":
         try:
@@ -210,8 +182,6 @@ def main():
     print(f"Finished: {finished}")
     print(f"Log CSV:  {log_path_csv}")
     print("=" * 60)
-
-    send_report_to_slack(log_csv, log_path_csv, start_date, end_date)
 
 
 if __name__ == "__main__":

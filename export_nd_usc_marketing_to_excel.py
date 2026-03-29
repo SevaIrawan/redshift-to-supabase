@@ -1,8 +1,7 @@
 """
-Export 2 MV ke 2 file Excel (Supabase), lalu upload ke Slack channel #data_marketing_usc.
+Export 2 MV ke 2 file Excel (Supabase).
 - nd_usc_marketing_mv  -> exports/nd_usc_marketing_mv.xlsx
 - nd_trans_usc_marketing_mv -> exports/nd_trans_usc_marketing_mv.xlsx
-Upload ke Slack butuh: SLACK_BOT_TOKEN + SLACK_CHANNEL_ID_DATA_MARKETING_USC di .env.
 """
 import os
 import sys
@@ -11,7 +10,6 @@ from datetime import datetime
 import pandas as pd
 import psycopg2
 from dotenv import load_dotenv
-from slack_sdk import WebClient
 
 if sys.platform == "win32":
     try:
@@ -103,28 +101,5 @@ df_trans.to_excel(path_trans, index=False, engine="openpyxl")
 print(f"  -> {path_trans} ({count_trans:,} rows)")
 
 conn.close()
-
-# Upload 2 file ke Slack #data_marketing_usc
-bot_token = os.getenv("SLACK_BOT_TOKEN", "").strip()
-channel_id = (
-    os.getenv("SLACK_CHANNEL_ID_DATA_MARKETING_USC", "").strip()
-    or os.getenv("SLACK_CHANNEL_ID", "").strip()
-)
-if bot_token and channel_id:
-    client = WebClient(token=bot_token)
-    for path, rows in [(path_member, count_member), (path_trans, count_trans)]:
-        try:
-            client.files_upload_v2(
-                channel=channel_id,
-                title=os.path.splitext(os.path.basename(path))[0],
-                filename=os.path.basename(path),
-                file=path,
-                initial_comment=f"Export: {os.path.basename(path)} — {rows:,} rows",
-            )
-            print(f"  Slack upload OK: {os.path.basename(path)}")
-        except Exception as e:
-            print(f"  [Slack] Upload GAGAL {os.path.basename(path)}: {e}")
-else:
-    print("\n[INFO] Slack upload skip: set SLACK_BOT_TOKEN + SLACK_CHANNEL_ID_DATA_MARKETING_USC di .env")
 
 print("\n[DONE]")

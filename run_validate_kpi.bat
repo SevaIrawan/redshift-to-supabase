@@ -1,5 +1,5 @@
 @echo off
-REM KPI Validation — H-1 (1 day) per brand, log ke Slack
+REM KPI Validation — H-1 (1 day) per brand, log CSV
 cd /d "%~dp0"
 echo KPI Validation - Started %date% %time%
 python validate_kpi.py
