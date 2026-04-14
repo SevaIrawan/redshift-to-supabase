@@ -1,0 +1,1 @@
+REFRESH MATERIALIZED VIEW CONCURRENTLY public.tier_myr_mv_summary;

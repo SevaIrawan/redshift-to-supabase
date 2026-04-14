@@ -1,0 +1,1 @@
+REFRESH MATERIALIZED VIEW public.hod_customer_retention_monthly_sgd;
