@@ -49,6 +49,16 @@ COLUMN_MAPPING = [
     ("unique_key", "uniquekey"),
 ]
 
+# Kolom tambahan (nama sama di rs_blue_whale_* dan blue_whale_*); dipakai rs_to_*.py
+EXTRA_COLUMNS_TRAFFIC_REGISTER_FTD: list[tuple[str, str]] = [
+    ("traffic", "traffic"),
+    ("register_date", "register_date"),
+    ("first_deposit_date", "first_deposit_date"),
+    ("first_deposit_amount", "first_deposit_amount"),
+]
+
+COLUMN_MAPPING_WITH_TRAFFIC_FTD = COLUMN_MAPPING + EXTRA_COLUMNS_TRAFFIC_REGISTER_FTD
+
 
 def quote_name(name: str) -> str:
     return '"' + name.replace('"', '""') + '"'
@@ -71,14 +81,21 @@ def connect_supabase():
 COALESCE_COLS = {"operator_username"}
 
 
-def run_sync(conn, source_table: str, target_table: str) -> tuple[int, list[date]]:
+def run_sync(
+    conn,
+    source_table: str,
+    target_table: str,
+    *,
+    column_mapping: list[tuple[str, str]] | None = None,
+) -> tuple[int, list[date]]:
     """Sync 2 hari ke belakang (kemarin + 2 hari lalu). Return (row_count, [date_2, date_1])."""
     today = date.today()
     date_1 = today - timedelta(days=1)   # kemarin (01/03 bila hari ini 02/03)
     date_2 = today - timedelta(days=2)   # 2 hari lalu (28/02 bila hari ini 02/03)
     dates = [date_2, date_1]   # kronologi: 28/02 dulu, 01/03 kemudian
 
-    src_cols, tgt_cols = zip(*COLUMN_MAPPING)
+    mapping = column_mapping if column_mapping is not None else COLUMN_MAPPING
+    src_cols, tgt_cols = zip(*mapping)
 
     def _sel(c):
         if c in COALESCE_COLS:

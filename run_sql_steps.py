@@ -21,7 +21,7 @@ load_dotenv()
 SCRIPT_DIR = Path(__file__).resolve().parent
 CONFIG_PATH = SCRIPT_DIR / "sql_runner_config.json"
 LOGS_DIR = SCRIPT_DIR / "logs"
-EXPECTED_STEPS = 41
+EXPECTED_STEPS = 39
 
 
 def connect_supabase():
